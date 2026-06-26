@@ -1,6 +1,6 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from .api.routes import analysis, health
+from .api.routes import analysis, health, scanner
 from .api.websocket.manager import WebSocketManager
 from .core.config import get_settings
 
@@ -19,6 +19,7 @@ app.add_middleware(
 # Routes
 app.include_router(health.router)
 app.include_router(analysis.router, prefix="/analysis", tags=["analysis"])
+app.include_router(scanner.router, prefix="/scanner", tags=["scanner"])
 
 # WebSocket
 ws_manager = WebSocketManager()

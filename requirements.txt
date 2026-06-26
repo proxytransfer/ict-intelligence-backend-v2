@@ -1,0 +1,12 @@
+fastapi
+uvicorn[standard]
+pydantic-settings
+aiosqlite
+tenacity
+scikit-learn
+pandas
+numpy
+python-jose[cryptography]
+passlib[bcrypt]
+python-multipart
+httpx

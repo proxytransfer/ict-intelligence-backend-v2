@@ -1,0 +1,11 @@
+concept: ExternalLiquidity
+category: Liquidity
+description: >
+  Níveis de liquidez fora da estrutura de negociação atual,
+  geralmente máximas/mínimas de períodos anteriores.
+requires: [Swing]
+produces: [LiquidityPool]
+states: [Above, Below]
+parameters:
+  lookback_periods: 20
+confidence_range: [0, 100]

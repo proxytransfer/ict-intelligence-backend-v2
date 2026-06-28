@@ -1,0 +1,12 @@
+concept: Swing
+category: MarketStructure
+description: >
+  Um Swing High é um candle cuja máxima é maior que a máxima
+  dos N candles anteriores e posteriores. Swing Low é o inverso.
+requires: []
+produces: [SwingPoint]
+states: [High, Low]
+parameters:
+  left_bars: 3
+  right_bars: 3
+confidence_range: [0, 100]

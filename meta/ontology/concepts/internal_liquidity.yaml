@@ -1,0 +1,11 @@
+concept: InternalLiquidity
+category: Liquidity
+description: >
+  Níveis de liquidez dentro da estrutura de negociação atual,
+  como máximas/mínimas de range ou FVG.
+requires: [DealingRange, FVG]
+produces: [LiquidityPool]
+states: [Inside, Outside]
+parameters:
+  fvg_proximity_factor: 0.5
+confidence_range: [0, 100]

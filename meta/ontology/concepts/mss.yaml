@@ -1,0 +1,14 @@
+concept: MSS
+category: MarketStructure
+description: >
+  Market Structure Shift: rompimento de um swing anterior com fechamento
+  além dele, indicando mudança de tendência de curto prazo.
+requires: [Swing, Displacement]
+produces: [Bias]
+invalidates: [CHOCH]
+confirms: [LiquiditySweep]
+states: [Bullish, Bearish]
+parameters:
+  break_mode: close  # ou high/low
+  min_displacement_factor: 1.5
+confidence_range: [0, 100]

@@ -1,0 +1,11 @@
+concept: FVG
+category: PDArray
+description: >
+  Fair Value Gap: lacuna entre candles consecutivos onde o preço
+  não sobrepôs completamente o candle anterior.
+requires: [Displacement]
+produces: [Target, CE]
+states: [Bullish, Bearish]
+parameters:
+  min_gap_atr_ratio: 0.1
+confidence_range: [0, 100]

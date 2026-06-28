@@ -1,0 +1,12 @@
+concept: Displacement
+category: MarketStructure
+description: >
+  Movimento impulsivo caracterizado por corpo grande (>70% do range),
+  sombra pequena e fechamento próximo à extremidade. Pode ser bullish ou bearish.
+requires: [Swing]
+produces: [DisplacementSignal]
+states: [Bullish, Bearish]
+parameters:
+  min_body_ratio: 0.7
+  min_range_atr_multiple: 0.5
+confidence_range: [0, 100]

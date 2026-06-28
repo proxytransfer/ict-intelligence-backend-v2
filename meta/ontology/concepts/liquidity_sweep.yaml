@@ -1,0 +1,13 @@
+concept: LiquiditySweep
+category: Liquidity
+description: >
+  Evento onde o preço rompe um nível de liquidez (ERL/IRL),
+  coleta ordens e retorna para dentro da estrutura anterior.
+requires: [DrawOnLiquidity, ExternalLiquidity, InternalLiquidity]
+produces: [MSS, CISD]
+states: [Full, Partial, Purge, False]
+parameters:
+  max_candles_to_return: 5
+  min_breach_pct: 0.05
+  min_return_pct: 0.03
+confidence_range: [0, 100]

@@ -7,11 +7,11 @@ services:
     plan: free
     region: oregon
     buildCommand: pip install --only-binary=pandas -r requirements.txt
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    startCommand: uvicorn api.server:app --host 0.0.0.0 --port $PORT
     autoDeployTrigger: commit
-    healthCheckPath: /health
+    healthCheckPath: /docs
     envVars:
       - key: PYTHON_VERSION
-        value: 3.12.9
-      - key: JWT_SECRET
-        generateValue: true
+        value: 3.11.0
+      - key: PORT
+        value: 10000

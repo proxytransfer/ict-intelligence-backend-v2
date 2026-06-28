@@ -3,106 +3,141 @@ import httpx
 from typing import List
 from app.domain.candle import Candle
 from app.infrastructure.providers.base import BaseDataProvider
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
+
+
+# ── Crypto → Binance (real-time, gratuito, sem API key) ──────────────────────
+BINANCE_MAP = {
+    "BTCUSD": "BTCUSDT",
+    "ETHUSD": "ETHUSDT",
+    "BNBUSD": "BNBUSDT",
+    "SOLUSD": "SOLUSDT",
+}
+
+# ── Índices (Yahoo Finance — Futuros) ─────────────────────────────────────────
+INDEX_MAP = {
+    "NQ100":  "NQ=F",    "NAS100": "NQ=F",   "NASDAQ": "NQ=F",
+    "USTEC":  "NQ=F",    "NQ":     "NQ=F",
+    "SP500":  "ES=F",    "US500":  "ES=F",   "SPX":    "ES=F",
+    "DOW":    "YM=F",    "US30":   "YM=F",
+    "DAX":    "FDAX=F",  "GER40":  "FDAX=F",
+}
+
+# ── Metais ────────────────────────────────────────────────────────────────────
+METALS_MAP = {
+    "GOLD":   "GC=F",  "XAUUSD": "GC=F",
+    "SILVER": "SI=F",  "XAGUSD": "SI=F",
+    "OIL":    "CL=F",  "USOIL":  "CL=F",
+}
+
+# ── Top Forex (Yahoo: EURUSD=X) ───────────────────────────────────────────────
+FOREX_PAIRS = {
+    "EURUSD", "GBPUSD", "USDJPY", "USDCHF", "AUDUSD",
+    "USDCAD", "NZDUSD", "EURGBP", "EURJPY", "GBPJPY",
+}
+
+HOURS_PER_CANDLE = {
+    "1m": 1/60, "5m": 5/60, "15m": 15/60, "30m": 30/60,
+    "1h": 1.0,  "4h": 4.0,  "1d": 24.0,
+}
+
 
 class YahooFinanceProvider(BaseDataProvider):
+
     async def fetch_candles(self, symbol: str, timeframe: str, limit: int = 100) -> List[Candle]:
-        symbol = symbol.upper()
-        
-        # ── Rota 1: Binance (Cripto em tempo real - SEM CACHE) ────────────────
-        if symbol in ["BTCUSD", "ETHUSD", "SOLUSD", "BNBUSD"]:
-            return await self._fetch_binance(symbol, timeframe, limit)
-        
-        # ── Rota 2: Yahoo Finance (Forex, Índices, Metais) ────────────────────
-        return await self._fetch_yahoo(symbol, timeframe, limit)
+        sym = symbol.upper()
+        if sym in BINANCE_MAP:
+            return await self._from_binance(sym, timeframe, limit)
+        return await self._from_yahoo(sym, timeframe, limit)
 
-    async def _fetch_binance(self, symbol: str, timeframe: str, limit: int) -> List[Candle]:
-        # Mapear BTCUSD para BTCUSDT (Binance usa USDT)
-        binance_symbol = symbol.replace("USD", "USDT")
-        interval = self._map_timeframe_binance(timeframe)
-        
-        url = f"https://api.binance.com/api/v3/klines"
+    # ── Binance ───────────────────────────────────────────────────────────────
+    async def _from_binance(self, symbol: str, timeframe: str, limit: int) -> List[Candle]:
+        """Binance suporta 1m/5m/15m/30m/1h/4h/1d nativamente."""
+        url = "https://api.binance.com/api/v3/klines"
         params = {
-            "symbol": binance_symbol,
-            "interval": interval,
-            "limit": limit
+            "symbol": BINANCE_MAP[symbol],
+            "interval": timeframe,   # Binance aceita "4h" diretamente
+            "limit": limit,
         }
-        
-        async with httpx.AsyncClient() as client:
-            response = await client.get(url, params=params)
-            response.raise_for_status()
-            data = response.json()
-            
-        candles = []
-        for item in data:
-            # item[0]: Open time, item[1]: Open, item[2]: High, item[3]: Low, item[4]: Close, item[5]: Volume
-            candles.append(Candle(
-                timestamp=datetime.fromtimestamp(item[0] / 1000.0),
-                open=float(item[1]),
-                high=float(item[2]),
-                low=float(item[3]),
-                close=float(item[4]),
-                volume=float(item[5])
-            ))
-        return candles
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(url, params=params)
+            resp.raise_for_status()
+            data = resp.json()
 
-    async def _fetch_yahoo(self, symbol: str, timeframe: str, limit: int) -> List[Candle]:
-        ticker_symbol = self._map_symbol_yahoo(symbol)
-        interval = self._map_timeframe_yahoo(timeframe)
-        
-        # Forçar busca de dados frescos usando datas explícitas
-        # Isso evita o cache de dados históricos desatualizados
-        end_date = datetime.now()
-        start_date = end_date - timedelta(days=30)
-        
+        return [
+            Candle(
+                timestamp=datetime.fromtimestamp(k[0] / 1000, tz=timezone.utc),
+                open=float(k[1]),
+                high=float(k[2]),
+                low=float(k[3]),
+                close=float(k[4]),
+                volume=float(k[5]),
+            )
+            for k in data
+        ]
+
+    # ── Yahoo Finance ─────────────────────────────────────────────────────────
+    async def _from_yahoo(self, symbol: str, timeframe: str, limit: int) -> List[Candle]:
+        """
+        yfinance NÃO suporta intervalo '4h'.
+        Para 4H: busca 1H e reamostrar via pandas resample.
+        """
+        ticker_symbol = self._resolve_yahoo_symbol(symbol)
+        is_4h = timeframe == "4h"
+        yf_interval = "1h" if is_4h else self._yf_interval(timeframe)
+
+        # Datas explícitas → evita cache do yfinance
+        end = datetime.now(tz=timezone.utc)
+        hours = HOURS_PER_CANDLE.get(timeframe, 1.0)
+        fetch_n = (limit * 5) if is_4h else int(limit * 1.5)
+        start = end - timedelta(hours=max(hours * fetch_n, 48))
+
         ticker = yf.Ticker(ticker_symbol)
-        df = ticker.history(start=start_date, end=end_date, interval=interval)
-        
+        df = ticker.history(start=start, end=end, interval=yf_interval, auto_adjust=True)
+
         if df.empty:
-            # Fallback se a busca por data falhar (ex: mercado fechado ou símbolo novo)
-            df = ticker.history(period="1mo", interval=interval)
-            
-        if df.empty:
-            raise Exception(f"Nenhum dado encontrado para o símbolo {symbol}")
-            
+            raise Exception(f"Sem dados para {symbol} ({ticker_symbol})")
+
+        # Resample 1H → 4H
+        if is_4h:
+            df = (
+                df.resample("4h")
+                .agg({"Open": "first", "High": "max", "Low": "min",
+                      "Close": "last", "Volume": "sum"})
+                .dropna()
+            )
+
         df = df.tail(limit)
-        
+
         candles = []
         for index, row in df.iterrows():
+            ts = index.to_pydatetime()
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=timezone.utc)
             candles.append(Candle(
-                timestamp=index.to_pydatetime(),
-                open=float(row['Open']),
-                high=float(row['High']),
-                low=float(row['Low']),
-                close=float(row['Close']),
-                volume=float(row['Volume'])
+                timestamp=ts,
+                open=float(row["Open"]),
+                high=float(row["High"]),
+                low=float(row["Min"] if "Min" in row else row["Low"]),
+                close=float(row["Close"]),
+                volume=float(row["Volume"]),
             ))
         return candles
 
-    def _map_symbol_yahoo(self, symbol: str) -> str:
-        # Mapeamento robusto para Yahoo Finance
-        mapping = {
-            "NQ100": "NQ=F",
-            "SP500": "ES=F",
-            "DOW": "YM=F",
-            "DAX": "^GDAXI",
-            "XAUUSD": "GC=F",
-            "XAGUSD": "SI=F",
-            "OIL": "CL=F"
-        }
-        if symbol in mapping:
-            return mapping[symbol]
-        
-        # Forex (ex: EURUSD -> EURUSD=X)
-        if len(symbol) == 6:
-            return f"{symbol}=X"
-            
-        return symbol
+    # ── Resolução de símbolo Yahoo ─────────────────────────────────────────────
+    def _resolve_yahoo_symbol(self, symbol: str) -> str:
+        sym = symbol.upper()
+        if sym in INDEX_MAP:
+            return INDEX_MAP[sym]
+        if sym in METALS_MAP:
+            return METALS_MAP[sym]
+        # Forex: 6 chars alfabéticos → EURUSD=X
+        if sym in FOREX_PAIRS or (len(sym) == 6 and sym.isalpha()):
+            return f"{sym}=X"
+        return sym
 
-    def _map_timeframe_binance(self, timeframe: str) -> str:
-        mapping = {"1m": "1m", "5m": "5m", "15m": "15m", "1h": "1h", "4h": "4h", "1d": "1d"}
-        return mapping.get(timeframe, "1h")
-
-    def _map_timeframe_yahoo(self, timeframe: str) -> str:
-        mapping = {"1m": "1m", "5m": "5m", "15m": "15m", "1h": "1h", "1d": "1d"}
-        return mapping.get(timeframe, "1h")
+    def _yf_interval(self, timeframe: str) -> str:
+        return {
+            "1m": "1m", "5m": "5m", "15m": "15m",
+            "30m": "30m", "1h": "1h", "1d": "1d",
+        }.get(timeframe, "1h")

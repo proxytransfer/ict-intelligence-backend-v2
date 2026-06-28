@@ -72,6 +72,7 @@ class YahooFinanceProvider(BaseDataProvider):
                 low=float(k[3]),
                 close=float(k[4]),
                 volume=float(k[5]),
+                timeframe=timeframe
             )
             for k in data
         ]
@@ -118,9 +119,10 @@ class YahooFinanceProvider(BaseDataProvider):
                 timestamp=ts,
                 open=float(row["Open"]),
                 high=float(row["High"]),
-                low=float(row["Min"] if "Min" in row else row["Low"]),
+                low=float(row["Low"]),
                 close=float(row["Close"]),
                 volume=float(row["Volume"]),
+                timeframe=timeframe
             ))
         return candles
 

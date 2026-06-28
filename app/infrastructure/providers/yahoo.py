@@ -43,6 +43,10 @@ class YahooFinanceProvider(BaseDataProvider):
             return "GC=F"
         if symbol in ["SILVER", "XAGUSD"]:
             return "SI=F"
+        if symbol == "BTCUSD":
+            return "BTC-USD"
+        if symbol == "ETHUSD":
+            return "ETH-USD"
         # Forex
         if len(symbol) == 6 and not symbol.endswith("USDT"):
             return f"{symbol}=X"

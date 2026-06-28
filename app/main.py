@@ -1,6 +1,7 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from .api.routes import analysis, health, scanner
+from .routers.symbols import router as symbols_router
 from .api.websocket.manager import WebSocketManager
 from .core.config import get_settings
 
@@ -24,6 +25,7 @@ async def health_check():
 app.include_router(health.router)
 app.include_router(analysis.router, prefix="/analysis", tags=["analysis"])
 app.include_router(scanner.router, prefix="/scanner", tags=["scanner"])
+app.include_router(symbols_router)
 
 # WebSocket
 ws_manager = WebSocketManager()
@@ -33,7 +35,6 @@ async def websocket_endpoint(websocket: WebSocket, symbol: str):
     await ws_manager.connect(websocket, symbol)
     try:
         while True:
-            # Keep-alive simple
             data = await websocket.receive_text()
     except WebSocketDisconnect:
         ws_manager.disconnect(websocket, symbol)

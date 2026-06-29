@@ -3,13 +3,13 @@ services:
   - type: web
     name: probabilistic-engine
     runtime: python
-    repo: https://github.com/proxytransfer/probabilistic-engine-v2-backend
+    repo: https://github.com/proxytransfer/ict-intelligence-backend-v2
     plan: free
     region: oregon
-    buildCommand: pip install --only-binary=pandas -r requirements.txt
-    startCommand: uvicorn api.server:app --host 0.0.0.0 --port $PORT
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     autoDeployTrigger: commit
-    healthCheckPath: /docs
+    healthCheckPath: /health
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0

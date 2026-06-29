@@ -15,14 +15,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mapeamento de símbolos comuns para garantir que o yfinance use o formato correto
+# Mapeamento de símbolos comuns
 SYMBOL_MAP = {
     "BTCUSD": "BTC-USD",
     "BTC": "BTC-USD",
     "EURUSD": "EURUSD=X",
     "GOLD": "GC=F",
     "SP500": "^GSPC",
-    "NAS100": "^IXIC"
+    "NAS100": "^IXIC",
+    "NQ100": "^IXIC"
 }
 
 @app.get("/")
@@ -31,30 +32,33 @@ async def root():
         "status": "online", 
         "project": "ICT Market Intelligence",
         "version": "2.0",
-        "timestamp": datetime.now().isoformat(),
-        "endpoints": ["/health", "/api/price/{symbol}", "/api/analysis/{symbol}", "/docs"]
+        "timestamp": datetime.now().isoformat()
     }
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "service": "probabilistic-engine", "timestamp": datetime.now().isoformat()}
+    return {"status": "ok", "service": "probabilistic-engine"}
 
+@app.get("/symbols")
+async def get_symbols():
+    """Retorna a lista de símbolos suportados."""
+    return [
+        {"id": "BTCUSD", "name": "Bitcoin / USD", "category": "Criptomoedas"},
+        {"id": "EURUSD", "name": "Euro / USD", "category": "Câmbio"},
+        {"id": "NQ100", "name": "Nasdaq 100", "category": "Índices"},
+        {"id": "GOLD", "name": "Ouro", "category": "Metais"}
+    ]
+
+@app.get("/price/{symbol}")
 @app.get("/api/price/{symbol}")
 async def get_price(symbol: str):
-    """
-    Obtém o preço real de um ativo usando yfinance.
-    Resolve símbolos comuns como BTCUSD -> BTC-USD.
-    """
     original_symbol = symbol.upper()
     yf_symbol = SYMBOL_MAP.get(original_symbol, original_symbol)
     
     try:
         ticker = yf.Ticker(yf_symbol)
-        # Obter dados do último dia com intervalo de 1 minuto para o preço mais recente
         data = ticker.history(period="1d", interval="1m")
-        
         if data.empty:
-            # Tentar novamente com intervalo de 5 minutos se 1m falhar (comum fora de horário)
             data = ticker.history(period="1d", interval="5m")
             
         if data.empty:
@@ -66,49 +70,43 @@ async def get_price(symbol: str):
         pct_change = (change / open_price) * 100
         
         return {
-            "requested_symbol": original_symbol,
-            "resolved_symbol": yf_symbol,
+            "symbol": original_symbol,
             "price": round(float(current_price), 5),
             "change": round(float(change), 5),
             "pct_change": round(float(pct_change), 2),
-            "timestamp": datetime.now().isoformat(),
-            "source": "yfinance"
+            "timestamp": datetime.now().isoformat()
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/analysis/{symbol}")
 @app.get("/api/analysis/{symbol}")
 async def get_analysis(symbol: str):
-    """
-    Executa a análise das 18 camadas para um símbolo específico.
-    Integração real com o motor probabilístico ICT.
-    """
     symbol = symbol.upper()
-    # Aqui simulamos a chamada ao motor de inferência real
-    # Em produção, isto chamaria o InferenceEngine com dados do EventStore
     
-    # Exemplo de narrativa dinâmica baseada no ativo
+    # Simulação de análise baseada no preço real
+    price_data = await get_price(symbol)
+    price = price_data["price"]
+    
     narratives = {
-        "BTCUSD": "BTCUSD: PO3 em acumulação concluída na sessão asiática. Londres expandindo para liquidez externa em PDH; aguardando manipulação para entrada em OB H1.",
-        "EURUSD": "EURUSD: Rejeição em H4 FVG. Preço buscando Internal Liquidity em 1.1320. Viés de baixa para a sessão de NY.",
-        "GOLD": "GOLD: Consolidação acima do Dealing Range Equilibrium. Aguardando expansão após notícia macro."
+        "BTCUSD": f"BTCUSD em ${price}: PO3 em acumulação concluída na sessão asiática. Londres expandindo para liquidez externa em PDH; aguardando manipulação para entrada em OB H1.",
+        "NQ100": f"NQ100 em ${price}: Rejeição em H4 FVG. Preço buscando Internal Liquidity. Viés de baixa para a sessão de NY.",
+        "EURUSD": f"EURUSD em ${price}: Consolidação acima do Dealing Range Equilibrium."
     }
-    
-    default_narrative = f"{symbol}: Análise probabilística em processamento. Estrutura de mercado em fase de Reprecificação."
     
     return {
         "symbol": symbol,
-        "bias": "Otimista" if "BTC" in symbol else "Neutra",
+        "price": price,
+        "bias": "Otimista" if "BTC" in symbol or "NQ" in symbol else "Neutra",
         "confidence": 74.0,
         "phase": "Reprecificação",
-        "narrative": narratives.get(symbol, default_narrative),
+        "narrative": narratives.get(symbol, f"{symbol} em ${price}: Análise em processamento."),
         "zones_active": 0,
         "decomposition": {
             "structural": 82,
             "liquidity": 65,
             "momentum": 70
-        },
-        "timestamp": datetime.now().isoformat()
+        }
     }
 
 if __name__ == "__main__":
